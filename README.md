@@ -1,7 +1,11 @@
 # 🤖 Chatbot Inteligente com n8n
 
 Projeto de automação desenvolvido utilizando **n8n**, **OpenAI** e **Google Sheets** para responder automaticamente perguntas enviadas por uma API.
+---
 
+## Visão geral do workflow
+
+![Workflow](workflow.png)
 ---
 
 ## Objetivo
