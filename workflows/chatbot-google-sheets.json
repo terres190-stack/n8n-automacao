@@ -1,5 +1,5 @@
 {
-  "name": "Chatbot de Suporte com Google Sheets e OpenAI",
+  "name": "Chatbot Inteligente com n8n, OpenAI e Google Sheets",
   "nodes": [
     {
       "parameters": {
