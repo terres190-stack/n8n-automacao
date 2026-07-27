@@ -1,0 +1,234 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatbot",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -576,
+        -48
+      ],
+      "id": "0917a56e-c85f-4060-992b-3f047f870c81",
+      "name": "Webhook",
+      "webhookId": "d2e1215e-6724-4aa2-a6ff-3a1c005e0867"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"resposta\": \"{{ $json.resposta || $json.output[0].content[0].text }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        880,
+        -64
+      ],
+      "id": "15f72252-b810-4eb5-b75d-4a9a7e456ab8",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-3.5-turbo",
+          "mode": "list",
+          "cachedResultName": "GPT-3.5-TURBO"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Você é um assistente de suporte técnico.\n\nPergunta do usuário:\n{{ $node[\"Webhook\"].json.body.pergunta }}\n\nResponda de forma clara, direta e útil."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        512,
+        80
+      ],
+      "id": "f31ca680-d39b-4078-8cf8-e83780834952",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "WI7RXPKmAAxHDFyq",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1vl9UcvFABdpItCAdoRDHe5aupJHdodGnV8cErdNAZL0",
+          "mode": "list",
+          "cachedResultName": "Nola-projeto",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1vl9UcvFABdpItCAdoRDHe5aupJHdodGnV8cErdNAZL0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "base_conhecimento",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1vl9UcvFABdpItCAdoRDHe5aupJHdodGnV8cErdNAZL0/edit#gid=0"
+        },
+        "options": {
+          "returnFirstMatch": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -304,
+        -48
+      ],
+      "id": "40d2e8df-523b-4fd9-a894-2bb78150295a",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "48kRW3IJBSBe60at",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let encontrou = false;\nlet resposta = null;\n\nconst perguntaUsuario = $items(\"Webhook\")[0].json.body.pergunta\n  .toLowerCase()\n  .replace(/[^\\w\\s]/g, \"\") // remove pontuação\n  .replace(/\\s+/g, \" \") // remove espaços duplicados\n  .trim();\n\nfor (const item of items) {\n  const palavrasChave = item.json[\"Palavra chave\"]\n    .toLowerCase()\n    .split(\",\");\n\n  for (const chave of palavrasChave) {\n    const termos = chave.trim().split(\" \");\n\n    const bate = termos.every(termo =>\n      perguntaUsuario.includes(termo)\n    );\n\n    if (bate) {\n      encontrou = true;\n      resposta = item.json[\"Respostas\"];\n      break;\n    }\n  }\n\n  if (encontrou) break;\n}\n\nreturn [\n  {\n    json: {\n      encontrou,\n      resposta\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        -48
+      ],
+      "id": "0e0e574b-11cd-43d6-ab38-e0bb10e02d17",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d64cc2d4-6f9e-489b-8369-2cc7d0622bbf",
+              "leftValue": "={{ $json.encontrou }}",
+              "rightValue": "false",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        272,
+        -48
+      ],
+      "id": "d35d8aef-8df3-4863-923b-85b05262b52a",
+      "name": "If"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        []
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "pinData": {},
+  "triggerCount": 0,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
