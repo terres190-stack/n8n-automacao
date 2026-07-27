@@ -1,5 +1,5 @@
 {
-  "name": "My workflow",
+  "name": "Chatbot de Suporte com Google Sheets e OpenAI",
   "nodes": [
     {
       "parameters": {
@@ -17,13 +17,12 @@
         -48
       ],
       "id": "0917a56e-c85f-4060-992b-3f047f870c81",
-      "name": "Webhook",
-      "webhookId": "d2e1215e-6724-4aa2-a6ff-3a1c005e0867"
+      "name": "Receber pergunta"
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\n  \"resposta\": \"{{ $json.resposta || $json.output[0].content[0].text }}\"\n}",
+        "responseBody": "={{ {\n  \"resposta\": $json.resposta || $json.output?.[0]?.content?.[0]?.text || \"Não foi possível gerar uma resposta.\"\n} }}",
         "options": {}
       },
       "type": "n8n-nodes-base.respondToWebhook",
@@ -33,7 +32,7 @@
         -64
       ],
       "id": "15f72252-b810-4eb5-b75d-4a9a7e456ab8",
-      "name": "Respond to Webhook"
+      "name": "Retornar resposta"
     },
     {
       "parameters": {
@@ -46,7 +45,7 @@
         "responses": {
           "values": [
             {
-              "content": "=Você é um assistente de suporte técnico.\n\nPergunta do usuário:\n{{ $node[\"Webhook\"].json.body.pergunta }}\n\nResponda de forma clara, direta e útil."
+              "content": "=Você é um assistente de suporte técnico.\n\nPergunta do usuário:\n{{ $node[\"Receber pergunta\"].json.body.pergunta }}\n\nResponda de forma clara, direta, educada e útil. Caso não tenha informações suficientes, informe isso sem inventar dados."
             }
           ]
         },
@@ -60,32 +59,24 @@
         80
       ],
       "id": "f31ca680-d39b-4078-8cf8-e83780834952",
-      "name": "Message a model",
-      "credentials": {
-        "openAiApi": {
-          "id": "WI7RXPKmAAxHDFyq",
-          "name": "OpenAI account"
-        }
-      }
+      "name": "Gerar resposta com IA"
     },
     {
       "parameters": {
         "documentId": {
           "__rl": true,
-          "value": "1vl9UcvFABdpItCAdoRDHe5aupJHdodGnV8cErdNAZL0",
-          "mode": "list",
-          "cachedResultName": "Nola-projeto",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1vl9UcvFABdpItCAdoRDHe5aupJHdodGnV8cErdNAZL0/edit?usp=drivesdk"
+          "value": "CONFIGURE_SEU_DOCUMENT_ID",
+          "mode": "id",
+          "cachedResultName": "Base de conhecimento"
         },
         "sheetName": {
           "__rl": true,
-          "value": "gid=0",
-          "mode": "list",
-          "cachedResultName": "base_conhecimento",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1vl9UcvFABdpItCAdoRDHe5aupJHdodGnV8cErdNAZL0/edit#gid=0"
+          "value": "base_conhecimento",
+          "mode": "name",
+          "cachedResultName": "base_conhecimento"
         },
         "options": {
-          "returnFirstMatch": true
+          "returnFirstMatch": false
         }
       },
       "type": "n8n-nodes-base.googleSheets",
@@ -95,17 +86,11 @@
         -48
       ],
       "id": "40d2e8df-523b-4fd9-a894-2bb78150295a",
-      "name": "Get row(s) in sheet",
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "48kRW3IJBSBe60at",
-          "name": "Google Sheets OAuth2 API"
-        }
-      }
+      "name": "Consultar base de conhecimento"
     },
     {
       "parameters": {
-        "jsCode": "let encontrou = false;\nlet resposta = null;\n\nconst perguntaUsuario = $items(\"Webhook\")[0].json.body.pergunta\n  .toLowerCase()\n  .replace(/[^\\w\\s]/g, \"\") // remove pontuação\n  .replace(/\\s+/g, \" \") // remove espaços duplicados\n  .trim();\n\nfor (const item of items) {\n  const palavrasChave = item.json[\"Palavra chave\"]\n    .toLowerCase()\n    .split(\",\");\n\n  for (const chave of palavrasChave) {\n    const termos = chave.trim().split(\" \");\n\n    const bate = termos.every(termo =>\n      perguntaUsuario.includes(termo)\n    );\n\n    if (bate) {\n      encontrou = true;\n      resposta = item.json[\"Respostas\"];\n      break;\n    }\n  }\n\n  if (encontrou) break;\n}\n\nreturn [\n  {\n    json: {\n      encontrou,\n      resposta\n    }\n  }\n];"
+        "jsCode": "function normalizarTexto(texto) {\n  return String(texto ?? \"\")\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .toLowerCase()\n    .replace(/[^\\p{L}\\p{N}\\s]/gu, \"\")\n    .replace(/\\s+/g, \" \")\n    .trim();\n}\n\nconst webhookItems = $items(\"Receber pergunta\");\nconst perguntaOriginal = webhookItems[0]?.json?.body?.pergunta ?? \"\";\nconst perguntaUsuario = normalizarTexto(perguntaOriginal);\n\nif (!perguntaUsuario) {\n  return [\n    {\n      json: {\n        encontrou: true,\n        resposta: \"A pergunta não foi informada. Envie o campo 'pergunta' no corpo da solicitação.\"\n      }\n    }\n  ];\n}\n\nlet encontrou = false;\nlet resposta = null;\n\nfor (const item of items) {\n  const palavrasChave = String(item.json[\"Palavra chave\"] ?? \"\")\n    .split(\",\")\n    .map(normalizarTexto)\n    .filter(Boolean);\n\n  for (const chave of palavrasChave) {\n    const termos = chave\n      .split(\" \")\n      .map(termo => termo.trim())\n      .filter(Boolean);\n\n    const corresponde = termos.length > 0 && termos.every(termo =>\n      perguntaUsuario.includes(termo)\n    );\n\n    if (corresponde) {\n      encontrou = true;\n      resposta = item.json[\"Respostas\"] ??\n        \"Foi encontrada uma correspondência, mas não há uma resposta cadastrada.\";\n      break;\n    }\n  }\n\n  if (encontrou) {\n    break;\n  }\n}\n\nreturn [\n  {\n    json: {\n      encontrou,\n      resposta\n    }\n  }\n];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -114,7 +99,7 @@
         -48
       ],
       "id": "0e0e574b-11cd-43d6-ab38-e0bb10e02d17",
-      "name": "Code in JavaScript"
+      "name": "Buscar correspondência"
     },
     {
       "parameters": {
@@ -122,14 +107,14 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "loose",
+            "typeValidation": "strict",
             "version": 3
           },
           "conditions": [
             {
               "id": "d64cc2d4-6f9e-489b-8369-2cc7d0622bbf",
               "leftValue": "={{ $json.encontrou }}",
-              "rightValue": "false",
+              "rightValue": "",
               "operator": {
                 "type": "boolean",
                 "operation": "true",
@@ -139,7 +124,6 @@
           ],
           "combinator": "and"
         },
-        "looseTypeValidation": true,
         "options": {}
       },
       "type": "n8n-nodes-base.if",
@@ -149,75 +133,75 @@
         -48
       ],
       "id": "d35d8aef-8df3-4863-923b-85b05262b52a",
-      "name": "If"
+      "name": "Resposta encontrada?"
     }
   ],
   "connections": {
-    "Webhook": {
+    "Receber pergunta": {
       "main": [
         [
           {
-            "node": "Get row(s) in sheet",
+            "node": "Consultar base de conhecimento",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Respond to Webhook": {
-      "main": [
-        []
-      ]
-    },
-    "Message a model": {
+    "Consultar base de conhecimento": {
       "main": [
         [
           {
-            "node": "Respond to Webhook",
+            "node": "Buscar correspondência",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Get row(s) in sheet": {
+    "Buscar correspondência": {
       "main": [
         [
           {
-            "node": "Code in JavaScript",
+            "node": "Resposta encontrada?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Code in JavaScript": {
+    "Resposta encontrada?": {
       "main": [
         [
           {
-            "node": "If",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "If": {
-      "main": [
-        [
-          {
-            "node": "Respond to Webhook",
+            "node": "Retornar resposta",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Message a model",
+            "node": "Gerar resposta com IA",
             "type": "main",
             "index": 0
           }
         ]
+      ]
+    },
+    "Gerar resposta com IA": {
+      "main": [
+        [
+          {
+            "node": "Retornar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retornar resposta": {
+      "main": [
+        []
       ]
     }
   },
@@ -229,6 +213,6 @@
   "pinData": {},
   "triggerCount": 0,
   "meta": {
-    "templateCredsSetupCompleted": true
+    "templateCredsSetupCompleted": false
   }
 }
